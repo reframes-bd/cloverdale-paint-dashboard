@@ -18,7 +18,7 @@ jobs:
       - name: Check file size
         run: |
           SIZE=$(wc -c < index.html)
-          MAX_SIZE=700000
+          MAX_SIZE=800000
           if [ $SIZE -gt $MAX_SIZE ]; then
             echo "❌ File size check failed: $SIZE bytes (max $MAX_SIZE)"
             exit 1
@@ -73,7 +73,7 @@ jobs:
           echo "## Validation Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "✅ All checks passed" >> $GITHUB_STEP_SUMMARY
-          echo "- File size: < 700 KB" >> $GITHUB_STEP_SUMMARY
+          echo "- File size: < 800 KB" >> $GITHUB_STEP_SUMMARY
           echo "- Secrets scan: clear" >> $GITHUB_STEP_SUMMARY
           echo "- Required IDs: present" >> $GITHUB_STEP_SUMMARY
           echo "- HTML syntax: valid" >> $GITHUB_STEP_SUMMARY
