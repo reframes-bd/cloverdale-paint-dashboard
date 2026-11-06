@@ -63,28 +63,36 @@ function pick(o, names) {
 const num = (v) => { if (v == null || v === '') return null; if (typeof v === 'object') v = v.value ?? v.total ?? v.count; const x = Number(v); return Number.isFinite(x) ? x : null; };
 
 // Returns { date: 'YYYY-MM-DD', time: 'HH:MM' } in the brand's local time, as Metricool shows it.
+// Metricool's own post screens show times at UTC-7 (checked against the Metricool Posts screen, Nov 2026).
+// Every timestamp is turned into UTC first and then shown the same way, so dates and times match Metricool exactly.
+const SHOW_OFFSET_H = -7;
+const SERVER_TZ = 'Europe/Madrid'; // the live API returns wall-clock times in Metricool's server zone
+// UTC milliseconds for a wall-clock time in a given IANA zone
+function wallToUtc(y, mo, d, h, mi, se, tz) {
+  const asUtc = Date.UTC(y, mo - 1, d, h, mi, se);
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(asUtc));
+  const g = (t) => +parts.find((p) => p.type === t).value;
+  const shown = Date.UTC(g('year'), g('month') - 1, g('day'), g('hour'), g('minute'), g('second'));
+  return asUtc - (shown - asUtc);
+}
+const fromUtc = (ms) => { const d = new Date(ms + SHOW_OFFSET_H * 3600e3).toISOString(); return { date: d.slice(0, 10), time: d.slice(11, 16) }; };
 function toLocal(v) {
   if (v == null) return null;
-  if (typeof v === 'object') v = v.dateTime ?? v.date ?? v.timestamp ?? null;
+  let tz = SERVER_TZ;
+  if (typeof v === 'object') { if (v.timezone) tz = v.timezone; v = v.dateTime ?? v.date ?? v.timestamp ?? null; }
   if (v == null) return null;
   const s = String(v);
-  let d;
-  if (/^\d{14}$/.test(s)) {
-    // Metricool's compact UTC stamp (YYYYMMDDHHMMSS). Metricool's own post list shows these at UTC-7
-    // (checked against the Metricool Posts screen, Nov 2026), so convert the same way to match it exactly.
-    const u = Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8), +s.slice(8, 10), +s.slice(10, 12), +s.slice(12, 14)) - 7 * 3600e3;
-    d = new Date(u);
-    return { date: d.toISOString().slice(0, 10), time: d.toISOString().slice(11, 16) };
-  }
+  let m;
+  // compact UTC stamp YYYYMMDDHHMMSS (Metricool's reporting connector)
+  if ((m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(s))) return fromUtc(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]));
   if (/^\d{8}$/.test(s)) return { date: `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`, time: null };
-  // a local wall-clock time with no offset (Metricool's {dateTime, timezone} objects): use as is
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?$/.test(s)) return { date: s.slice(0, 10), time: s.slice(11, 16) };
-  if (/^\d{10,13}$/.test(s)) d = new Date(s.length === 10 ? +s * 1000 : +s);
-  else d = new Date(s);
+  // wall-clock time with no offset: it is in the zone Metricool sent with it (Madrid by default)
+  if ((m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?$/.exec(s))) {
+    try { return fromUtc(wallToUtc(+m[1], +m[2], +m[3], +m[4], +m[5], +(m[6] || 0), tz)); } catch { return fromUtc(wallToUtc(+m[1], +m[2], +m[3], +m[4], +m[5], +(m[6] || 0), SERVER_TZ)); }
+  }
+  const d = /^\d{10,13}$/.test(s) ? new Date(s.length === 10 ? +s * 1000 : +s) : new Date(s);
   if (isNaN(d)) return /^\d{4}-\d{2}-\d{2}/.test(s) ? { date: s.slice(0, 10), time: null } : null;
-  const f = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(d);
-  const g = (t) => f.find((x) => x.type === t).value;
-  return { date: `${g('year')}-${g('month')}-${g('day')}`, time: `${g('hour')}:${g('minute')}` };
+  return fromUtc(d.getTime());
 }
 
 // Every numeric metric Metricool returns for the post, under Metricool's own field names
@@ -132,7 +140,7 @@ function normalize(ch, o, forced) {
   const when = toLocal(pick(o, ['publishedAt', 'created', 'createdAt', 'timestamp', 'date', 'publicationDate', 'dateTime', 'published']));
   if (!url || !when) return null;
   const { date, time } = when;
-  const likes = num(pick(o, ['likes', 'reactions', 'likeCount', 'reactionsCount']));
+  const likes = num(pick(o, ['likes', 'reactions', 'postVideoReactions', 'likeCount', 'reactionsCount']));
   const comments = num(pick(o, ['comments', 'commentsCount', 'commentCount']));
   const saves = num(pick(o, ['saved', 'saves']));
   const shares = num(pick(o, ['shares', 'shared', 'sharesCount', 'reposts']));
@@ -141,11 +149,11 @@ function normalize(ch, o, forced) {
   if (inter == null && [likes, comments, saves, shares].some((x) => x != null)) inter = (likes || 0) + (comments || 0) + (saves || 0) + (shares || 0);
   // first non-zero value wins, so a 0 "video views" on a photo post doesn't hide its impressions
   const firstNZ = (names) => { let zero = null; for (const n of names) { const x = num(pick(o, [n])); if (x) return x; if (x === 0) zero = 0; } return zero; };
-  const views = firstNZ(ch === 'li' ? ['impressions', 'views', 'videoViews'] : ['views', 'videoViews', 'plays', 'impressions', 'viewCount']);
-  let reach = num(pick(o, ['reach', 'impressionsUnique', 'uniqueImpressions', 'postImpressionsUnique']));
+  const views = firstNZ(ch === 'li' ? ['impressions', 'views', 'videoViews'] : ['views', 'videoViews', 'blueReelsPlayCount', 'plays', 'impressions', 'viewCount']);
+  let reach = num(pick(o, ['reach', 'impressionsUnique', 'postImpressionsUnique', 'uniqueImpressions']));
   if (reach === 0) reach = null; // Facebook reels report 0 reach; leave it blank instead
   if (reach == null && ch === 'li') reach = views; // LinkedIn company pages only report impressions
-  const watch = num(pick(o, ['averageWatchTime', 'avgWatchTime', 'videoAvgTimeWatched', 'averageViewDuration', 'avgTimeWatched']));
+  const watch = num(pick(o, ['averageWatchTime', 'avgWatchTime', 'videoAvgTimeWatched', 'postVideoAvgTimeWatchedSeconds', 'averageViewDuration', 'avgTimeWatched']));
   return {
     ch, date, type: typeLabel(ch, pick(o, ['type', 'mediaType', 'media_type', 'postType', 'contentType']), forced),
     title: title(pick(o, ['content', 'text', 'caption', 'message', 'comment', 'commentary', 'title', 'description'])) || '(no caption)',
