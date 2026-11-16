@@ -1,0 +1,22 @@
+name: Check inbox access (read only)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check inbox access
+        env:
+          METRICOOL_API_TOKEN: ${{ secrets.METRICOOL_API_TOKEN }}
+          METRICOOL_BRAND_ID: 6980817
+          METRICOOL_USER_ID: 5352390
+        run: node scripts/probe-inbox.js
