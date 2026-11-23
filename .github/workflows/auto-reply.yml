@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       force_digest:
-        description: 'Send the weekly digest now (skips the Monday check)'
+        description: 'Send the daily digest now (any time; does not use up the morning digest)'
         type: boolean
         default: false
   schedule:
@@ -42,7 +42,7 @@ jobs:
           ALERT_DIR: ${{ runner.temp }}/alerts
         run: node scripts/auto-reply.js
 
-      - name: Weekly digest (Mondays, optional)
+      - name: Daily digest (every morning from 8:00 Vancouver, optional)
         if: always()
         continue-on-error: true
         env:
