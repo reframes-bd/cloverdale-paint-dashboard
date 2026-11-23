@@ -1285,7 +1285,9 @@ body.locked .app,body.locked .fab{visibility:hidden}
     onReady(function(){
       if(role!=='admin'){
         document.body.classList.add('cp-user');
-        if(!document.getElementById('cpRoleCss')){ var st=document.createElement('style'); st.id='cpRoleCss'; st.textContent='body.cp-user #sec-ga4,body.cp-user #sec-ads,body.cp-user #sec-email,body.cp-user [data-go="#sec-ga4"],body.cp-user [data-go="#sec-ads"],body.cp-user [data-go="#sec-email"]{display:none !important}'; document.head.appendChild(st); }
+        if(!document.getElementById('cpRoleCss')){ var st=document.createElement('style'); st.id='cpRoleCss'; st.textContent='body.cp-user #sec-ga4,body.cp-user #sec-ads,body.cp-user #sec-email,body.cp-user [data-go="#sec-ga4"],body.cp-user [data-go="#sec-ads"],body.cp-user [data-go="#sec-email"],body.cp-user #sec-inbox,body.cp-user [data-go="#sec-inbox"]{display:none !important}'; document.head.appendChild(st); }
+      } else if(!document.getElementById('cpInboxJs')){
+        var ib=document.createElement('script'); ib.id='cpInboxJs'; ib.src='inbox.js?v=2'; ib.defer=true; document.body.appendChild(ib);
       }
       var wa=document.getElementById('whoAv'), wn=document.getElementById('whoName'), wr=document.getElementById('whoRole');
       if(wa) wa.textContent=((email||'?').trim()[0]||'?').toUpperCase();
@@ -1380,6 +1382,7 @@ body.locked .app,body.locked .fab{visibility:hidden}
       <button class="nav" data-go="#sec-timing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span class="nt">Timing</span><span class="tipl">Timing</span></button>
       <button class="nav" data-go="#sec-market"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 20V11M12 20V5M19 20v-6"/></svg><span class="nt">Competitors</span><span class="tipl">Competitors</span></button>
       <button class="nav" data-go="#sec-ads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 14v-4l11-5v14z"/><path d="M15 9.5a3 3 0 0 1 0 5M7 14l1.5 5h2.5L10 14"/></svg><span class="nt">Ad campaigns</span><span class="tipl">Ad campaigns</span></button>
+      <button class="nav" data-go="#sec-inbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 13l2.5-7.5h11L20 13v6H4z"/><path d="M4 13h4.5l1 2.5h5l1-2.5H20"/></svg><span class="nt">Inbox</span><span class="tipl">Inbox</span></button>
       <button class="nav" data-go="#sec-calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7h16M8 3v4M16 3v4M4 7v13h16V7z"/></svg><span class="nt">Content calendar</span><span class="tipl">Content calendar</span></button>
     </nav>
     <div class="navg"><span class="navl">Channels</span><div id="navCh" style="display:grid;gap:2px;justify-items:inherit"></div></div>
@@ -1444,6 +1447,8 @@ body.locked .app,body.locked .fab{visibility:hidden}
       <section class="sec nx" id="sec-email" aria-label="Email timing"><div id="emailRoot"></div></section>
 
       <section class="sec nx" id="sec-ads" aria-label="Ad campaigns"><div id="adsRoot"></div></section>
+
+      <section class="sec nx" id="sec-inbox" aria-label="Inbox"><div id="inboxRoot"></div></section>
 
       <section class="sec nx" id="sec-calendar" aria-label="Content calendar"><div class="sh"><h2>Content calendar</h2><p>Scheduled and published posts across every connected channel.</p></div><div id="calListRoot"></div></section>
 
@@ -2794,14 +2799,14 @@ $('#searchQ').addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.target.value
 document.addEventListener('keydown',e=>{ if(e.key==='/'&&!e.target.closest('input,textarea')&&!layer.innerHTML){ e.preventDefault(); const q=$('#searchQ'); if(q&&q.offsetParent){ q.focus(); } else openChat(); } });
 $('#navCh').innerHTML=SOC.map(k=>`<button class="nav" data-ch="${k}"><span class="bi">${LG[k](18)}</span><span class="nt">${CH[k].name}</span><span class="nv" data-nv="${k}"></span><span class="tipl">${CH[k].name}</span></button>`).join('')+`<button class="nav" data-go="#sec-ga4"><span class="bi">${LG.ga(18)}</span><span class="nt">Google Analytics 4</span><span class="nv" data-nv="ga4"></span><span class="tipl">Google Analytics 4</span></button><button class="nav" data-go="#sec-email"><span class="bi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="M4 7.5l8 6 8-6"/></svg></span><span class="nt">Email timing</span><span class="nv" data-nv="email"></span><span class="tipl">Email timing</span></button>`;
 $$('.nav[data-ch]').forEach(b=>b.onclick=()=>openChannel(b.dataset.ch));
-const SECS=[['#top','Overview'],['#sec-growth','Growth'],['#sec-reach','Reach'],['#sec-content','Content'],['#sec-geo','Audience'],['#sec-timing','Timing'],['#sec-ga4','Website'],['#sec-email','Email'],['#sec-ads','Ads'],['#sec-calendar','Calendar'],['#sec-market','Competitors']];
+const SECS=[['#top','Overview'],['#sec-growth','Growth'],['#sec-reach','Reach'],['#sec-content','Content'],['#sec-geo','Audience'],['#sec-timing','Timing'],['#sec-ga4','Website'],['#sec-email','Email'],['#sec-ads','Ads'],['#sec-inbox','Inbox'],['#sec-calendar','Calendar'],['#sec-market','Competitors']];
 $('#ptabs').innerHTML=SECS.map(([t,l],i)=>`<button data-go="${t}" aria-current="${i===0}">${l}</button>`).join('');
 const goSec=sel=>{ const t=$(sel); if(!t) return; if(sel==='#top') window.scrollTo({top:0,behavior:RM?'auto':'smooth'}); else t.scrollIntoView({behavior:RM?'auto':'smooth',block:'start'}); };
 $$('[data-go]').forEach(b=>b.onclick=()=>goSec(b.dataset.go));
 const __calNavBtn=document.querySelector('.nav[data-go="#sec-calendar"]'); if(__calNavBtn) __calNavBtn.onclick=()=>openBigCalendar();
 $('#navAsk').onclick=()=>openChat(); $('#navReport').onclick=()=>openReport(); $('#navCust').onclick=()=>openCustomize(); $('#reportBtn').onclick=()=>openReport(); $('#pReport').onclick=()=>openReport();
 function setCurrent(sel){ $$('[data-go]').forEach(b=>b.setAttribute('aria-current',String(b.dataset.go===sel))); const pb=$(`#ptabs [data-go="${sel}"]`); if(pb){ const pt=$('#ptabs'); pt.scrollTo({left:pb.offsetLeft-16,behavior:RM?'auto':'smooth'}); } }
-if('IntersectionObserver' in window){ const io=new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting) setCurrent(e.target.id==='sec-overview'?'#top':'#'+e.target.id); }); },{rootMargin:'-40% 0px -55% 0px'}); ['#sec-overview','#sec-growth','#sec-reach','#sec-content','#sec-geo','#sec-timing','#sec-ga4','#sec-email','#sec-ads','#sec-calendar','#sec-market'].forEach(sl=>{ const el=$(sl); el&&io.observe(el); }); }
+if('IntersectionObserver' in window){ const io=new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting) setCurrent(e.target.id==='sec-overview'?'#top':'#'+e.target.id); }); },{rootMargin:'-40% 0px -55% 0px'}); ['#sec-overview','#sec-growth','#sec-reach','#sec-content','#sec-geo','#sec-timing','#sec-ga4','#sec-email','#sec-ads','#sec-inbox','#sec-calendar','#sec-market'].forEach(sl=>{ const el=$(sl); el&&io.observe(el); }); }
 /* theme */
 const themeNow=()=>{ const a=document.documentElement.getAttribute('data-theme'); return a==='dark'||a==='light'?a:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'); };
 function syncTheme(){ const t=themeNow(); $$('.themes button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.th===t)));
