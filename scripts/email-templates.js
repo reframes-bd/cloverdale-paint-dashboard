@@ -1,4 +1,4 @@
-// Email templates for the Cloverdale social inbox (weekly digest and urgent alerts).
+// Email templates for the Cloverdale social inbox (daily digest and urgent alerts).
 // Every email is multipart/alternative: a plain-text part (fallback) and a designed HTML part.
 // HTML rules for email clients: tables for layout, inline styles only, no web fonts, no images, no scripts, max 600px.
 'use strict';
@@ -121,18 +121,21 @@ function fmtStamp(iso, tz) {
 const delta = (now, before) => { if (before == null) return ''; const d = now - before; return d === 0 ? 'Same as last week' : `${d > 0 ? '+' : '−'}${Math.abs(d)} vs last week`; };
 const where = (r) => `${platformLabel(r.platform)} ${r.kind === 'dm' ? 'DM' : 'comment'}`;
 
-// ---------- weekly digest ----------
-// d: { tz, fromMs, toMs, rows (this week), prevCount, high, offTopic, waitingDms, byStatus, byCat, topWords [[w,c]], settings {replies_on, dry_run} }
+// ---------- digest (daily; weekly wording kept for period 'week') ----------
+// d: { tz, period 'day'|'week', fromMs, toMs, rows (period), attention? (rows to remind about), openCount?, prevCount, high, offTopic, waitingDms, byStatus, byCat, topWords [[w,c]], settings {replies_on, dry_run} }
 function digestHtml(d) {
   const tz = d.tz;
   const total = d.rows.length;
   const s = d.byStatus;
-  const range = `${fmtDate(d.fromMs, tz)} – ${fmtDate(d.toMs, tz)}, ${fmtYear(d.toMs, tz)}`;
+  const daily = d.period === 'day';
+  const range = daily ? new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(d.toMs))
+    : `${fmtDate(d.fromMs, tz)} – ${fmtDate(d.toMs, tz)}, ${fmtYear(d.toMs, tz)}`;
+  const when = daily ? 'in the last 24 hours' : 'this week';
   const live = d.settings && d.settings.replies_on && !d.settings.dry_run;
   const auto = (s.replied || 0) + (s.would_reply || 0);
-  const need = s.needs_person || 0;
+  const need = d.openCount != null ? d.openCount : (s.needs_person || 0);
 
-  const attention = d.rows.filter((r) => r.status === 'needs_person' || r.priority === 'high')
+  const attention = (d.attention || d.rows.filter((r) => r.status === 'needs_person' || r.priority === 'high'))
     .sort((a, b) => (b.priority === 'high') - (a.priority === 'high') || Date.parse(b.received_at || 0) - Date.parse(a.received_at || 0));
   const shown = attention.slice(0, 8);
   const attentionHtml = shown.length ? shown.map((r, i) => {
@@ -143,7 +146,7 @@ ${meta([where(r), fmtStamp(r.received_at, tz), catLabel(r.category)])}
 ${quote(clip(r.text, 220) || 'No text (photo, sticker or attachment)')}
 ${link ? `<div style="margin-top:10px;font-size:13px;">${textLink(link, 'Open the post')}</div>` : ''}</div>`;
   }).join('') + (attention.length > shown.length ? p(`And ${attention.length - shown.length} more in the dashboard Inbox.`, 'font-size:13px;') : '')
-    : p('Nothing is waiting for a person this week.', `color:${C.ok};font-weight:600;`);
+    : p(`Nothing is waiting for a person${daily ? '' : ' this week'}.`, `color:${C.ok};font-weight:600;`);
 
   const catRows = Object.entries(d.byCat).filter(([k]) => !['off_topic', 'empty', 'spam'].includes(k)).sort((a, b) => b[1] - a[1])
     .map(([k, v]) => ({ label: catLabel(k), value: v, urgent: k === 'complaint_high' || k === 'complaint' }));
@@ -154,14 +157,14 @@ ${link ? `<div style="margin-top:10px;font-size:13px;">${textLink(link, 'Open th
   const platRows = Object.entries(plat).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ label: k, value: v }));
   const outcome = ['replied', 'would_reply', 'needs_person', 'no_reply', 'failed'].filter((k) => s[k]).map((k) => ({ label: statusLabel(k), value: s[k], urgent: k === 'failed' }));
 
-  const lead = `${total} message${total === 1 ? '' : 's'} came in this week. ${live ? `${auto} were answered automatically` : `${auto} would have been answered automatically`}${need ? `, and ${need} need${need === 1 ? 's' : ''} a person` : ', and nothing needs a person'}.`;
+  const lead = `${total} message${total === 1 ? '' : 's'} came in ${when}. ${live ? `${auto} were answered automatically` : `${auto} would have been answered automatically`}${need ? `, and ${need} ${need === 1 ? 'message is' : 'messages are'} waiting for a person${daily ? ' (last 7 days)' : ''}` : ', and nothing is waiting for a person'}.`;
 
   const body = p('Hi all,', `color:${C.ink};margin-top:22px;`)
     + p(esc(lead) + (live ? '' : ' Replies are still in dry run, so nothing has been posted to customers yet.'))
     + stats([
-      { label: 'Messages', value: total, note: delta(total, d.prevCount) },
+      { label: 'Messages', value: total, note: delta(total, d.prevCount).replace('last week', daily ? 'the day before' : 'last week') },
       { label: live ? 'Answered' : 'Would answer', value: auto, note: total ? `${Math.round((auto / total) * 100)}% of all` : '' },
-      { label: 'Need a person', value: need, note: d.waitingDms ? `${d.waitingDms} DM over 5 days` : 'None overdue' },
+      { label: daily ? 'Waiting' : 'Need a person', value: need, note: d.waitingDms ? `${d.waitingDms} DM over 5 days` : 'None overdue' },
       { label: 'Urgent', value: d.high, note: d.high ? 'Alert sent' : 'None', urgent: true },
     ])
     + section('Needs your attention', attentionHtml)
@@ -175,8 +178,9 @@ ${link ? `<div style="margin-top:10px;font-size:13px;">${textLink(link, 'Open th
 
   return shell({
     preheader: `${total} messages · ${need} need a person · ${d.high} urgent · ${range}`,
-    kicker: `Weekly digest · ${range}`, title: 'Weekly inbox digest', body,
-    footer: `Sent every Monday by the Cloverdale Paint social dashboard. Counts cover ${esc(range)}, Vancouver time. Customer messages are visible to admins only.`,
+    kicker: `${daily ? 'Daily' : 'Weekly'} digest · ${range}`, title: daily ? 'Daily inbox digest' : 'Weekly inbox digest', body,
+    footer: daily ? `Sent every morning by the Cloverdale Paint social dashboard. Counts cover the 24 hours before sending, Vancouver time; "Waiting" covers the last 7 days. Customer messages are visible to admins only.`
+      : `Sent every Monday by the Cloverdale Paint social dashboard. Counts cover ${esc(range)}, Vancouver time. Customer messages are visible to admins only.`,
   });
 }
 
