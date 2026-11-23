@@ -92,11 +92,16 @@ async function main() {
   const iq = (provider, extra) => new URLSearchParams(Object.assign({ blogId: E.METRICOOL_BRAND_ID, userId: E.METRICOOL_USER_ID, provider }, extra || {})).toString();
 
   // ----- Supabase REST -----
+  const SAFE_NAMES = new Set(['inbox_messages', 'reply_rules', 'reply_settings', 'alert_log', 'site_stores', 'site_pages', 'public', 'platform', 'kind', 'external_id', 'thread_id', 'post_link', 'author_id', 'author_name', 'text', 'received_at', 'category', 'priority', 'rule', 'status', 'reply_text', 'replied_at', 'pages_used', 'error', 'id', 'message_id', 'reason', 'emailed', 'last_run_at', 'last_run_note', 'post_shape', 'last_digest_at', 'inbox_messages_platform_kind_external_id_key', 'inbox_messages_status_check', 'inbox_messages_priority_check', 'inbox_messages_platform_check', 'inbox_messages_kind_check']);
   async function sb(method, table, qs, body, prefer) {
     const headers = { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' };
     if (prefer) headers.Prefer = prefer;
     const res = await fetch(`${SB}${table}${qs ? '?' + qs : ''}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-    if (!res.ok) throw new Error(`Supabase ${res.status} on ${table}`); // never include the body: it can echo customer data
+    if (!res.ok) { // log code and message only, with quoted values masked: details can echo customer data
+      let info = '';
+      try { const j = JSON.parse(await res.text()); info = ` code ${j.code || '?'}: ${String(j.message || '').replace(/"([^"]*)"/g, (m, s) => (SAFE_NAMES.has(s) ? m : '"…"')).slice(0, 200)}`; } catch (e) { /* no detail */ }
+      throw new Error(`Supabase ${res.status} on ${method} ${table}${info}`);
+    }
     const txt = await res.text();
     return txt ? JSON.parse(txt) : null;
   }
