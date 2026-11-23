@@ -40,6 +40,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set git identity
+        run: |
+          git config user.name "dashboard-bot"
+          git config user.email "dashboard-bot@users.noreply.github.com"
+
       - name: Save snapshot
         if: inputs.action == 'save'
         run: |
@@ -63,8 +68,6 @@ jobs:
         run: |
           if [ "$CONFIRM" != "RESTORE" ]; then echo "Type RESTORE in the confirm box to restore. Nothing changed."; exit 1; fi
           if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then echo "Snapshot tag not found: $TAG"; git tag -l 'auto-reply-stable-*'; exit 1; fi
-          git config user.name "dashboard-bot"
-          git config user.email "dashboard-bot@users.noreply.github.com"
           restored=""
           for f in $FILES; do
             if git cat-file -e "$TAG:$f" 2>/dev/null; then git checkout "$TAG" -- "$f"; restored="$restored $f"; fi
