@@ -260,7 +260,12 @@ async function main() {
 
   // ----- 6 and 7. classify and decide -----
   const COLS = ['platform', 'kind', 'external_id', 'thread_id', 'post_link', 'author_id', 'author_name', 'text', 'received_at', 'category', 'priority', 'rule', 'status', 'reply_text', 'replied_at', 'pages_used', 'error'];
-  const toRow = (c, o) => { const row = {}; for (const k of COLS) row[k] = k in o ? o[k] : (k in c ? c[k] : null); return row; };
+  const toRow = (c, o) => {
+    const row = {}; for (const k of COLS) row[k] = k in o ? o[k] : (k in c ? c[k] : null);
+    if (row.priority == null) row.priority = 'normal'; // NOT NULL columns: never send an explicit null
+    if (row.status == null) row.status = 'new';
+    return row;
+  };
 
   const out = []; // {row, id}
   const catCounts = {};
