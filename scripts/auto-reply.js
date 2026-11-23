@@ -36,6 +36,7 @@ const idsOf = (x) => {
 const idLike = (s) => /^\d{6,}$/.test(s) || (/^[\w-]{16,}$/.test(s) && /\d/.test(s));
 const mask = (s) => String(s || '').replace(/[0-9]{3,}/g, 'N').replace(/[A-Za-z0-9_-]{16,}/g, 'ID').replace(/\s+/g, ' ').slice(0, 120);
 
+const T = require('./email-templates.js');
 const DASHBOARD_URL = 'https://reframes-bd.github.io/cloverdale-paint-dashboard/#sec-inbox';
 const oneLine = (x) => String(x == null ? '' : x).replace(/\s*[\r\n]+\s*/g, ' ').trim();
 // RFC 2047: encode a non-ASCII header value as folded =?UTF-8?B?...?= words (each word under 76 characters)
@@ -60,13 +61,11 @@ function fromHeader(mailFrom) {
   const f = oneLine(mailFrom);
   return /[<"]/.test(f) ? f : `"Cloverdale inbox alerts" <${f}>`;
 }
-// Build one alert .eml. Plain text, UTF-8; the body is base64 when it is not plain ASCII.
-function buildEml(env, subject, bodyLines, now) {
-  const body = bodyLines.join('\r\n') + '\r\n';
-  const ascii = /^[\x00-\x7f]*$/.test(body);
-  const b64 = Buffer.from(body, 'utf8').toString('base64').replace(/(.{76})/g, '$1\r\n');
-  return [`From: ${fromHeader(env.MAIL_FROM)}`, `To: ${oneLine(env.ALERT_TO)}`, `Subject: ${encodeHeader(subject)}`, `Date: ${new Date(now).toUTCString()}`, 'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset=UTF-8', `Content-Transfer-Encoding: ${ascii ? '7bit' : 'base64'}`, 'Importance: high', 'X-Priority: 1', '', ascii ? body : b64, ''].join('\r\n');
+// Build one alert .eml: plain-text part (unchanged lines) plus a designed HTML part.
+function buildEml(env, subject, bodyLines, now, htmlData) {
+  const text = bodyLines.join('\r\n') + '\r\n';
+  const html = htmlData ? T.alertHtml(Object.assign({ tz: TZ }, htmlData)) : null;
+  return T.buildMime({ from: fromHeader(env.MAIL_FROM), to: env.ALERT_TO, subject, text, html, urgent: true, now });
 }
 function urgentReason(r) {
   if (r.category === 'pr') return 'Press or media request';
@@ -367,7 +366,7 @@ async function main() {
   if (E.ALERT_DIR && alerts.length) {
     fs.mkdirSync(E.ALERT_DIR, { recursive: true });
     alerts.forEach((a, i) => {
-      let subject, lines;
+      let subject, lines, htmlData;
       if (a.row) {
         const r = a.row;
         const who = oneLine(r.author_name) || 'a customer';
@@ -379,14 +378,17 @@ async function main() {
           : r.status === 'would_reply' && r.reply_text ? `(prepared, not posted: dry run) ${oneLine(r.reply_text)}` : 'Nothing was posted';
         lines = [`Why: ${urgentReason(r)}`, `When: ${vancouverStamp(r.received_at)}`, `Where: ${platform} ${r.kind === 'dm' ? 'direct message' : 'comment'}`, `Customer: ${oneLine(r.author_name) || 'unknown'}`,
           `They wrote: ${oneLine(r.text)}`, `We replied: ${replied}`, `Post: ${r.post_link || 'no link'}`, `Open the dashboard Inbox: ${DASHBOARD_URL}`, `Rule: ${r.rule}`];
+        htmlData = { row: r, reason: urgentReason(r) };
       } else if (a.reason === 'limit') {
         subject = 'Cloverdale inbox alert: auto-reply limit reached';
         lines = ['The reply limit was reached in this run. The remaining messages are marked "needs a person" in the dashboard Inbox.'];
+        htmlData = { system: { title: 'Auto-reply limit reached', text: lines[0] } };
       } else {
         subject = 'Cloverdale inbox alert: auto-reply posting problem';
         lines = ['Posting replies failed three times in one run, so posting was stopped. The remaining replies are saved as "would reply" in the dashboard Inbox.'];
+        htmlData = { system: { title: 'Auto-reply posting problem', text: lines[0] } };
       }
-      fs.writeFileSync(path.join(E.ALERT_DIR, `alert-${Date.now()}-${i}.eml`), buildEml(E, subject, lines, now), 'utf8');
+      fs.writeFileSync(path.join(E.ALERT_DIR, `alert-${Date.now()}-${i}.eml`), buildEml(E, subject, lines, now, htmlData), 'utf8');
     });
   }
 

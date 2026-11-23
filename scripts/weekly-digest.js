@@ -6,6 +6,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const T = require('./email-templates.js');
 
 const TZ = 'America/Vancouver';
 const DAY = 24 * 3600 * 1000;
@@ -43,7 +44,7 @@ async function main(opts) {
   const vp = vancouverParts(now);
   const force = String(E.FORCE_DIGEST || '') === '1';
   if (!force && !(vp.weekday === 'Mon' && vp.hour >= 8)) { console.log('digest: not Monday after 8:00, skipping'); return 0; }
-  const settings = ((await sb('GET', 'reply_settings', 'id=eq.1&select=last_digest_at')) || [])[0];
+  const settings = ((await sb('GET', 'reply_settings', 'id=eq.1&select=last_digest_at,replies_on,dry_run,last_run_at')) || [])[0];
   if (!settings) { console.error('No reply_settings row'); return 1; }
   const last = settings.last_digest_at ? Date.parse(settings.last_digest_at) : null;
   if (last != null && now - last < 6 * DAY) { console.log('digest: already sent this week'); return 0; }
@@ -52,10 +53,13 @@ async function main(opts) {
   const fromMs = now - 7 * DAY;
   const rows = [];
   for (let off = 0; ; off += 1000) {
-    const page = await sb('GET', 'inbox_messages', `received_at=gte.${encodeURIComponent(new Date(fromMs).toISOString())}&select=category,status,priority,text,platform,kind,received_at&limit=1000&offset=${off}`);
+    const page = await sb('GET', 'inbox_messages', `received_at=gte.${encodeURIComponent(new Date(fromMs).toISOString())}&select=category,status,priority,text,platform,kind,received_at,author_name,post_link,rule&limit=1000&offset=${off}`);
     rows.push(...page);
     if (page.length < 1000) break;
   }
+  // previous week, count only (for the comparison in the email)
+  const prev = await sb('GET', 'inbox_messages', `received_at=gte.${encodeURIComponent(new Date(fromMs - 7 * DAY).toISOString())}&received_at=lt.${encodeURIComponent(new Date(fromMs).toISOString())}&select=id&limit=5000`);
+  const prevCount = Array.isArray(prev) ? prev.length : null;
   const tally = (key) => rows.reduce((m, r) => { const k = r[key] || 'none'; m[k] = (m[k] || 0) + 1; return m; }, {});
   const byStatus = tally('status'), byCat = tally('category');
   const high = rows.filter((r) => r.priority === 'high').length;
@@ -82,9 +86,8 @@ async function main(opts) {
     'Most common words in "general" messages (to help you decide whether a new rule is worth adding):',
     top.length ? top.map(([w, c]) => `  ${w}: ${c}`).join('\r\n') : '  none', '',
   ].join('\r\n');
-  const clean = (x) => String(x || '').replace(/[\r\n]+/g, ' ');
-  const eml = [`From: ${clean(E.MAIL_FROM)}`, `To: ${clean(E.ALERT_TO)}`, `Subject: Cloverdale inbox: weekly digest ${range}`, `Date: ${new Date(now).toUTCString()}`,
-    'MIME-Version: 1.0', 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: 8bit', '', body, ''].join('\r\n');
+  const html = T.digestHtml({ tz: TZ, fromMs, toMs: now, rows, prevCount, high, offTopic, waitingDms, byStatus, byCat, topWords: top, settings });
+  const eml = T.buildMime({ from: T.fromHeader(E.MAIL_FROM, 'Cloverdale social inbox'), to: E.ALERT_TO, subject: `Cloverdale social inbox: weekly digest, ${range}`, text: body, html, now });
   fs.mkdirSync(E.ALERT_DIR, { recursive: true });
   fs.writeFileSync(path.join(E.ALERT_DIR, `digest-${now}.eml`), eml, 'utf8');
   const iso = new Date(now).toISOString();
