@@ -5,10 +5,8 @@
 
 const DASHBOARD_URL = 'https://reframes-bd.github.io/cloverdale-paint-dashboard/#sec-inbox';
 const C = {
-  page: '#EEF0F2', card: '#FFFFFF', ink: '#15171A', ink2: '#4A5158', muted: '#7A828A', line: '#E3E6E9',
-  band: '#0E1012', bandInk: '#ECEEF0', bandMuted: '#9AA1A8',
-  good: '#1E9E6A', goodSoft: '#E6F6EF', warn: '#C77A12', warnSoft: '#FDF3E3', bad: '#D2453B', badSoft: '#FCEBEA',
-  ig: '#B65CD3', fb: '#3F8EFF', bar: '#20B3A1', barSoft: '#E4F6F3',
+  page: '#F4F4F2', card: '#FFFFFF', ink: '#1A1A1A', ink2: '#555555', muted: '#6B6B6B', line: '#E6E6E3', soft: '#F7F7F5',
+  accent: '#1A1A1A', urgent: '#B4232A', urgentSoft: '#FBF1F1', ok: '#2F7D55', bar: '#3A3A3A', barTrack: '#ECECE9', link: '#1F5FBF',
 };
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
@@ -64,120 +62,121 @@ function buildMime({ from, to, subject, text, html, urgent, now }) {
 }
 
 // ---------- HTML building blocks ----------
-function shell({ preheader, eyebrow, title, subtitle, bandColor, body, footer }) {
+// Design: one neutral palette, red only for urgency, hierarchy from size and weight, no badges or emoji.
+function shell({ preheader, title, kicker, body, footer, urgent }) {
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>${esc(title)}</title></head>
 <body style="margin:0;padding:0;background:${C.page};-webkit-text-size-adjust:100%;">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:${C.page};">${esc(preheader)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.page};">
-<tr><td align="center" style="padding:24px 12px;">
+<tr><td align="center" style="padding:32px 12px;">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">
-<tr><td style="background:${bandColor || C.band};border-radius:14px 14px 0 0;padding:26px 30px 24px 30px;font-family:${FONT};">
-<div style="font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:${C.bandMuted};font-weight:600;">${esc(eyebrow)}</div>
-<div style="font-size:26px;line-height:32px;color:${C.bandInk};font-weight:700;margin-top:8px;">${esc(title)}</div>
-${subtitle ? `<div style="font-size:15px;line-height:22px;color:${C.bandMuted};margin-top:6px;">${esc(subtitle)}</div>` : ''}
-</td></tr>
-<tr><td style="background:${C.card};border-radius:0 0 14px 14px;padding:8px 30px 30px 30px;font-family:${FONT};color:${C.ink};">
+<tr><td style="padding:0 4px 14px 4px;font-family:${FONT};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+<td style="font-size:14px;font-weight:700;color:${C.ink};letter-spacing:-0.1px;">Cloverdale Paint</td>
+<td align="right" style="font-size:13px;color:${C.muted};">Social inbox</td></tr></table></td></tr>
+<tr><td style="background:${C.card};border:1px solid ${C.line};border-top:3px solid ${urgent ? C.urgent : C.ink};border-radius:6px;padding:34px 36px 36px 36px;font-family:${FONT};color:${C.ink};">
+${kicker ? `<div style="font-size:13px;font-weight:600;color:${urgent ? C.urgent : C.muted};margin-bottom:10px;">${esc(kicker)}</div>` : ''}
+<h1 style="margin:0;font-size:26px;line-height:32px;font-weight:700;letter-spacing:-0.5px;color:${C.ink};">${esc(title)}</h1>
 ${body}
 </td></tr>
-<tr><td style="padding:18px 30px;font-family:${FONT};font-size:12px;line-height:18px;color:${C.muted};text-align:center;">${footer}</td></tr>
+<tr><td style="padding:20px 4px;font-family:${FONT};font-size:12px;line-height:18px;color:${C.muted};">${footer}</td></tr>
 </table></td></tr></table></body></html>`;
 }
-const section = (title, inner, note) => `<div style="margin-top:28px;">
-<div style="font-size:13px;letter-spacing:1px;text-transform:uppercase;color:${C.muted};font-weight:700;padding-bottom:8px;border-bottom:1px solid ${C.line};">${esc(title)}</div>
-${note ? `<div style="font-size:13px;line-height:19px;color:${C.ink2};margin-top:10px;">${esc(note)}</div>` : ''}
+const p = (html, extra) => `<p style="margin:16px 0 0 0;font-size:15px;line-height:24px;color:${C.ink2};${extra || ''}">${html}</p>`;
+const section = (title, inner, note) => `<div style="margin-top:34px;">
+<h2 style="margin:0;font-size:16px;line-height:22px;font-weight:700;letter-spacing:-0.2px;color:${C.ink};">${esc(title)}</h2>
+${note ? `<div style="font-size:13px;line-height:20px;color:${C.muted};margin-top:4px;">${esc(note)}</div>` : ''}
 ${inner}</div>`;
-const button = (href, label, color) => `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="display:inline-table;margin:4px 8px 4px 0;"><tr><td style="background:${color || C.ink};border-radius:8px;">
-<a href="${esc(href)}" style="display:inline-block;padding:11px 18px;font-family:${FONT};font-size:14px;font-weight:600;color:#FFFFFF;text-decoration:none;">${esc(label)}</a></td></tr></table>`;
-const pill = (label, fg, bg) => `<span style="display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;color:${fg};background:${bg};">${esc(label)}</span>`;
+const button = (href, label, color) => `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;"><tr><td style="background:${color || C.ink};border-radius:6px;">
+<a href="${esc(href)}" style="display:inline-block;padding:12px 20px;font-family:${FONT};font-size:14px;font-weight:600;color:#FFFFFF;text-decoration:none;">${esc(label)}</a></td></tr></table>`;
+const textLink = (href, label) => `<a href="${esc(href)}" style="color:${C.link};text-decoration:none;font-weight:600;">${esc(label)}</a>`;
+const hr = `<div style="height:1px;line-height:1px;font-size:0;background:${C.line};margin-top:30px;">&nbsp;</div>`;
 
-function kpis(items) { // [{label, value, note, color}]
-  const w = Math.floor(100 / items.length);
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:18px;"><tr>${items.map((k, i) =>
-    `<td width="${w}%" valign="top" style="padding:${i ? '0 0 0 8px' : '0'};"><div style="border:1px solid ${C.line};border-radius:10px;padding:14px 12px;">
-<div style="font-size:28px;line-height:32px;font-weight:700;color:${k.color || C.ink};">${esc(k.value)}</div>
-<div style="font-size:12px;line-height:16px;color:${C.ink2};margin-top:4px;font-weight:600;">${esc(k.label)}</div>
-${k.note ? `<div style="font-size:11px;line-height:15px;color:${C.muted};margin-top:3px;">${esc(k.note)}</div>` : ''}</div></td>`).join('')}</tr></table>`;
+function stats(items) { // [{label, value, note, urgent}]
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:26px;border-top:1px solid ${C.line};border-bottom:1px solid ${C.line};"><tr>${items.map((k, i) =>
+    `<td width="${Math.floor(100 / items.length)}%" valign="top" style="padding:18px 0 18px ${i ? '16px' : '0'};${i ? `border-left:1px solid ${C.line};` : ''}">
+<div style="font-size:28px;line-height:32px;font-weight:700;letter-spacing:-0.6px;color:${k.urgent && k.value ? C.urgent : C.ink};">${esc(k.value)}</div>
+<div style="font-size:13px;line-height:18px;color:${C.ink};margin-top:6px;font-weight:600;">${esc(k.label)}</div>
+${k.note ? `<div style="font-size:12px;line-height:17px;color:${C.muted};margin-top:2px;">${esc(k.note)}</div>` : ''}</td>`).join('')}</tr></table>`;
 }
-function bars(rows, total) { // [{label, value}]
+function bars(rows, total) { // [{label, value, urgent}]
   const max = Math.max(1, ...rows.map((r) => r.value));
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;">${rows.map((r) => {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:14px;">${rows.map((r) => {
     const pct = Math.max(2, Math.round((r.value / max) * 100));
-    const share = total ? Math.round((r.value / total) * 100) : 0;
-    return `<tr><td style="padding:6px 0;font-size:14px;line-height:18px;color:${C.ink};" width="44%">${esc(r.label)}</td>
-<td style="padding:6px 8px;" width="42%"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:${C.barSoft};border-radius:4px;height:10px;line-height:10px;font-size:0;">
-<table role="presentation" width="${pct}%" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:${r.color || C.bar};border-radius:4px;height:10px;line-height:10px;font-size:0;">&nbsp;</td></tr></table></td></tr></table></td>
-<td style="padding:6px 0;font-size:14px;color:${C.ink};text-align:right;font-weight:600;white-space:nowrap;" width="14%">${r.value}<span style="color:${C.muted};font-weight:400;font-size:12px;"> ${share}%</span></td></tr>`;
+    return `<tr><td style="padding:7px 12px 7px 0;font-size:14px;line-height:19px;color:${C.ink};" width="46%">${esc(r.label)}</td>
+<td style="padding:7px 0;" width="40%"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:${C.barTrack};height:6px;line-height:6px;font-size:0;border-radius:3px;">
+<table role="presentation" width="${pct}%" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:${r.urgent ? C.urgent : C.bar};height:6px;line-height:6px;font-size:0;border-radius:3px;">&nbsp;</td></tr></table></td></tr></table></td>
+<td style="padding:7px 0 7px 12px;font-size:14px;color:${C.ink};text-align:right;font-weight:600;white-space:nowrap;" width="14%">${r.value}${total ? `<span style="color:${C.muted};font-weight:400;"> · ${Math.round((r.value / total) * 100)}%</span>` : ''}</td></tr>`;
   }).join('')}</table>`;
 }
-const quote = (text) => `<div style="margin-top:8px;padding:12px 14px;background:${C.page};border-left:3px solid ${C.line};border-radius:4px;font-size:14px;line-height:20px;color:${C.ink};">${esc(text)}</div>`;
-const fmtDate = (ms, tz) => new Intl.DateTimeFormat('en-US', { timeZone: tz, month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(ms));
+const quote = (text, big) => `<div style="margin-top:12px;padding:2px 0 2px 16px;border-left:3px solid ${C.line};font-size:${big ? 17 : 15}px;line-height:${big ? 26 : 23}px;color:${C.ink};">${esc(text)}</div>`;
+const meta = (parts) => `<div style="font-size:13px;line-height:19px;color:${C.muted};margin-top:4px;">${parts.filter(Boolean).map(esc).join(' &nbsp;·&nbsp; ')}</div>`;
+const fmtDate = (ms, tz) => new Intl.DateTimeFormat('en-US', { timeZone: tz, month: 'short', day: 'numeric' }).format(new Date(ms));
+const fmtYear = (ms, tz) => new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric' }).format(new Date(ms));
 function fmtStamp(iso, tz) {
   const ms = Date.parse(iso || ''); if (Number.isNaN(ms)) return 'time unknown';
   return new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(ms));
 }
-const delta = (now, before) => { if (before == null) return ''; const d = now - before; return d === 0 ? 'same as last week' : `${d > 0 ? '+' : ''}${d} vs last week`; };
+const delta = (now, before) => { if (before == null) return ''; const d = now - before; return d === 0 ? 'Same as last week' : `${d > 0 ? '+' : '−'}${Math.abs(d)} vs last week`; };
+const where = (r) => `${platformLabel(r.platform)} ${r.kind === 'dm' ? 'DM' : 'comment'}`;
 
 // ---------- weekly digest ----------
-// d: { tz, fromMs, toMs, rows (this week), prevCount, high, offTopic, waitingDms, byStatus, byCat, topWords [[w,c]], settings {replies_on, dry_run, last_run_at} }
+// d: { tz, fromMs, toMs, rows (this week), prevCount, high, offTopic, waitingDms, byStatus, byCat, topWords [[w,c]], settings {replies_on, dry_run} }
 function digestHtml(d) {
   const tz = d.tz;
   const total = d.rows.length;
   const s = d.byStatus;
-  const range = `${fmtDate(d.fromMs, tz)} to ${fmtDate(d.toMs, tz)}`;
+  const range = `${fmtDate(d.fromMs, tz)} – ${fmtDate(d.toMs, tz)}, ${fmtYear(d.toMs, tz)}`;
   const live = d.settings && d.settings.replies_on && !d.settings.dry_run;
-  const mode = live ? pill('Replies are LIVE', C.good, C.goodSoft) : pill('Dry run: nothing is posted yet', C.warn, C.warnSoft);
   const auto = (s.replied || 0) + (s.would_reply || 0);
+  const need = s.needs_person || 0;
 
   const attention = d.rows.filter((r) => r.status === 'needs_person' || r.priority === 'high')
     .sort((a, b) => (b.priority === 'high') - (a.priority === 'high') || Date.parse(b.received_at || 0) - Date.parse(a.received_at || 0));
   const shown = attention.slice(0, 8);
-  const attentionHtml = shown.length ? shown.map((r) => {
+  const attentionHtml = shown.length ? shown.map((r, i) => {
     const link = safeUrl(r.post_link);
-    return `<div style="border:1px solid ${r.priority === 'high' ? '#F2C4C0' : C.line};border-radius:10px;padding:14px 16px;margin-top:12px;${r.priority === 'high' ? `background:${C.badSoft};` : ''}">
-<div>${r.priority === 'high' ? pill('Urgent', '#FFFFFF', C.bad) + ' ' : ''}${pill(platformLabel(r.platform) + ' ' + kindLabel(r.kind).toLowerCase().replace('dm', 'DM'), '#FFFFFF', r.platform === 'facebook' ? C.fb : C.ig)} ${pill(catLabel(r.category), C.ink2, C.page)}</div>
-<div style="font-size:15px;font-weight:700;color:${C.ink};margin-top:10px;">${esc(oneLine(r.author_name) || 'A customer')} <span style="font-weight:400;color:${C.muted};font-size:13px;">· ${esc(fmtStamp(r.received_at, tz))}</span></div>
-${quote(clip(r.text, 220) || '(no text: photo, sticker or attachment)')}
-${link ? `<div style="margin-top:10px;font-size:13px;"><a href="${esc(link)}" style="color:${C.fb};text-decoration:none;font-weight:600;">Open the post</a></div>` : ''}</div>`;
-  }).join('') + (attention.length > shown.length ? `<div style="font-size:13px;color:${C.ink2};margin-top:10px;">And ${attention.length - shown.length} more in the dashboard Inbox.</div>` : '')
-    : `<div style="margin-top:12px;padding:14px 16px;border-radius:10px;background:${C.goodSoft};color:${C.good};font-size:14px;font-weight:600;">Nothing is waiting for a person this week.</div>`;
+    return `<div style="padding:18px 0;${i ? `border-top:1px solid ${C.line};` : ''}">
+<div style="font-size:15px;line-height:21px;font-weight:700;color:${C.ink};">${r.priority === 'high' ? `<span style="color:${C.urgent};">Urgent · </span>` : ''}${esc(oneLine(r.author_name) || 'A customer')}</div>
+${meta([where(r), fmtStamp(r.received_at, tz), catLabel(r.category)])}
+${quote(clip(r.text, 220) || 'No text (photo, sticker or attachment)')}
+${link ? `<div style="margin-top:10px;font-size:13px;">${textLink(link, 'Open the post')}</div>` : ''}</div>`;
+  }).join('') + (attention.length > shown.length ? p(`And ${attention.length - shown.length} more in the dashboard Inbox.`, 'font-size:13px;') : '')
+    : p('Nothing is waiting for a person this week.', `color:${C.ok};font-weight:600;`);
 
-  const catRows = Object.entries(d.byCat).filter(([k]) => k !== 'off_topic' && k !== 'empty' && k !== 'spam').sort((a, b) => b[1] - a[1])
-    .map(([k, v]) => ({ label: catLabel(k), value: v, color: k === 'complaint_high' || k === 'complaint' ? C.bad : C.bar }));
+  const catRows = Object.entries(d.byCat).filter(([k]) => !['off_topic', 'empty', 'spam'].includes(k)).sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => ({ label: catLabel(k), value: v, urgent: k === 'complaint_high' || k === 'complaint' }));
   const ignored = (d.byCat.off_topic || 0) + (d.byCat.empty || 0) + (d.byCat.spam || 0);
+  const relevant = total - ignored;
 
   const plat = {}; for (const r of d.rows) { const k = `${platformLabel(r.platform)} ${r.kind === 'dm' ? 'DMs' : 'comments'}`; plat[k] = (plat[k] || 0) + 1; }
-  const platRows = Object.entries(plat).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ label: k, value: v, color: /^Facebook/.test(k) ? C.fb : C.ig }));
+  const platRows = Object.entries(plat).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ label: k, value: v }));
+  const outcome = ['replied', 'would_reply', 'needs_person', 'no_reply', 'failed'].filter((k) => s[k]).map((k) => ({ label: statusLabel(k), value: s[k], urgent: k === 'failed' }));
 
-  const outcome = [['replied', C.good], ['would_reply', C.bar], ['needs_person', C.warn], ['no_reply', '#B8BDC3'], ['failed', C.bad]]
-    .filter(([k]) => s[k]).map(([k, color]) => ({ label: statusLabel(k), value: s[k], color }));
+  const lead = `${total} message${total === 1 ? '' : 's'} came in this week. ${live ? `${auto} were answered automatically` : `${auto} would have been answered automatically`}${need ? `, and ${need} need${need === 1 ? 's' : ''} a person` : ', and nothing needs a person'}.`;
 
-  const words = d.topWords.length ? `<div style="margin-top:12px;">${d.topWords.map(([w, c]) =>
-    `<span style="display:inline-block;margin:0 6px 8px 0;padding:6px 11px;border-radius:999px;background:${C.page};border:1px solid ${C.line};font-size:13px;color:${C.ink};">${esc(w)} <b style="color:${C.muted};font-weight:600;">${c}</b></span>`).join('')}</div>` : '';
-
-  const intro = `<div style="font-size:16px;line-height:24px;color:${C.ink};margin-top:22px;">Hi all,</div>
-<div style="font-size:15px;line-height:23px;color:${C.ink2};margin-top:8px;">Here is what came in on Instagram and Facebook this week, what the auto-reply handled, and what still needs a person.</div>
-<div style="margin-top:12px;">${mode}</div>`;
-
-  const body = intro
-    + kpis([
-      { label: 'Messages in', value: total, note: delta(total, d.prevCount) },
-      { label: live ? 'Answered automatically' : 'Would be answered', value: auto, color: C.good, note: total ? `${Math.round((auto / total) * 100)}% of all` : '' },
-      { label: 'Need a person', value: s.needs_person || 0, color: (s.needs_person || 0) ? C.warn : C.ink, note: d.waitingDms ? `${d.waitingDms} DM over 5 days` : 'none overdue' },
-      { label: 'Urgent', value: d.high, color: d.high ? C.bad : C.ink, note: d.high ? 'alert emails sent' : 'none this week' },
+  const body = p('Hi all,', `color:${C.ink};margin-top:22px;`)
+    + p(esc(lead) + (live ? '' : ' Replies are still in dry run, so nothing has been posted to customers yet.'))
+    + stats([
+      { label: 'Messages', value: total, note: delta(total, d.prevCount) },
+      { label: live ? 'Answered' : 'Would answer', value: auto, note: total ? `${Math.round((auto / total) * 100)}% of all` : '' },
+      { label: 'Need a person', value: need, note: d.waitingDms ? `${d.waitingDms} DM over 5 days` : 'None overdue' },
+      { label: 'Urgent', value: d.high, note: d.high ? 'Alert sent' : 'None', urgent: true },
     ])
     + section('Needs your attention', attentionHtml)
-    + (catRows.length ? section('What people asked about', bars(catRows, total - ignored), `${ignored} more were off-topic, emoji-only or spam and were left alone.`) : '')
+    + (catRows.length ? section('What people asked about', bars(catRows, relevant), `${relevant} on-topic messages. ${ignored} off-topic, emoji-only or spam were left alone.`) : '')
     + (outcome.length ? section('What the system did', bars(outcome, total)) : '')
     + (platRows.length ? section('Where it came from', bars(platRows, total)) : '')
-    + (words ? section('Ideas for new rules', words, 'Most common words in messages that did not match any rule. If one keeps showing up, it may be worth a rule of its own.') : '')
-    + `<div style="margin-top:30px;">${button(DASHBOARD_URL, 'Open the Inbox in the dashboard', C.ink)}</div>
-<div style="font-size:15px;line-height:23px;color:${C.ink};margin-top:26px;">Thanks,<br>TJ</div>`;
+    + (d.topWords.length ? section('Ideas for new rules', p(d.topWords.map(([w, c]) => `${esc(w)} <span style="color:${C.muted};">(${c})</span>`).join(', '), 'margin-top:10px;'),
+      'Common words in messages no rule matched. A word that keeps coming back may deserve its own rule.') : '')
+    + button(DASHBOARD_URL, 'Open the Inbox in the dashboard')
+    + hr + p('Thanks,<br>TJ', `color:${C.ink};margin-top:22px;`);
 
-  const footer = `Sent automatically every Monday by the Cloverdale Paint social dashboard.<br>Counts cover ${esc(range)} (Vancouver time). Customer messages are only shown to admins.`;
   return shell({
-    preheader: `${total} messages, ${s.needs_person || 0} need a person, ${d.high} urgent. ${range}.`,
-    eyebrow: 'Cloverdale Paint · Social inbox', title: 'Weekly inbox digest', subtitle: range, body, footer,
+    preheader: `${total} messages · ${need} need a person · ${d.high} urgent · ${range}`,
+    kicker: `Weekly digest · ${range}`, title: 'Weekly inbox digest', body,
+    footer: `Sent every Monday by the Cloverdale Paint social dashboard. Counts cover ${esc(range)}, Vancouver time. Customer messages are visible to admins only.`,
   });
 }
 
@@ -185,41 +184,37 @@ ${link ? `<div style="margin-top:10px;font-size:13px;"><a href="${esc(link)}" st
 // a: { tz, row?, reason (text), system?: {title, text} }
 function alertHtml(a) {
   const tz = a.tz;
-  let body;
-  if (a.row) {
-    const r = a.row;
-    const link = safeUrl(r.post_link);
-    const posted = r.status === 'replied' && r.reply_text;
-    const prepared = r.status === 'would_reply' && r.reply_text;
-    const replyBlock = posted ? `${pill('Posted', C.good, C.goodSoft)}${quote(oneLine(r.reply_text))}`
-      : prepared ? `${pill('Prepared, not posted (dry run)', C.warn, C.warnSoft)}${quote(oneLine(r.reply_text))}`
-        : `<div style="font-size:14px;color:${C.ink2};margin-top:6px;">Nothing was posted. A person needs to answer this one.</div>`;
-    const row = (k, v) => `<tr><td style="padding:7px 0;font-size:13px;color:${C.muted};width:110px;vertical-align:top;">${esc(k)}</td><td style="padding:7px 0;font-size:14px;color:${C.ink};font-weight:600;">${v}</td></tr>`;
-    body = `<div style="margin-top:22px;padding:14px 16px;border-radius:10px;background:${C.badSoft};border:1px solid #F2C4C0;">
-<div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;color:${C.bad};font-weight:700;">Why this needs you</div>
-<div style="font-size:17px;line-height:24px;color:${C.ink};font-weight:700;margin-top:4px;">${esc(a.reason)}</div></div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:18px;">
-${row('Customer', esc(oneLine(r.author_name) || 'unknown'))}
-${row('Where', `${pill(platformLabel(r.platform) + ' ' + kindLabel(r.kind).toLowerCase().replace('dm', 'DM'), '#FFFFFF', r.platform === 'facebook' ? C.fb : C.ig)}`)}
-${row('When', esc(fmtStamp(r.received_at, tz)) + ' <span style="color:' + C.muted + ';font-weight:400;">Vancouver time</span>')}
-${row('Category', esc(catLabel(r.category)))}
-</table>
-${section('They wrote', quote(oneLine(r.text) || '(no text: photo, sticker or attachment)'))}
-${section('Our reply', replyBlock)}
-<div style="margin-top:26px;">${button(DASHBOARD_URL, 'Open the Inbox', C.bad)}${link ? button(link, 'Open the post', C.ink) : ''}</div>
-<div style="font-size:13px;line-height:19px;color:${C.ink2};margin-top:18px;">Please answer the customer directly, or mark it handled in the dashboard Inbox once someone has. Replies to this email go to the dashboard's sending address, not to the customer.</div>
-<div style="font-size:12px;color:${C.muted};margin-top:14px;">Rule that matched: ${esc(r.rule || 'n/a')}</div>`;
-  } else {
-    body = `<div style="font-size:15px;line-height:23px;color:${C.ink};margin-top:22px;">${esc(a.system.text)}</div>
-<div style="margin-top:22px;">${button(DASHBOARD_URL, 'Open the Inbox', C.ink)}</div>`;
+  if (!a.row) {
+    return shell({
+      preheader: a.system.text, kicker: 'Auto-reply notice', title: a.system.title,
+      body: p(esc(a.system.text)) + button(DASHBOARD_URL, 'Open the Inbox'),
+      footer: 'Sent by the Cloverdale Paint social dashboard.',
+    });
   }
-  const title = a.row ? 'A customer needs a person' : a.system.title;
+  const r = a.row;
+  const who = oneLine(r.author_name) || 'A customer';
+  const link = safeUrl(r.post_link);
+  const reply = r.status === 'replied' && r.reply_text ? { state: 'Posted automatically', text: oneLine(r.reply_text) }
+    : r.status === 'would_reply' && r.reply_text ? { state: 'Prepared, not posted (dry run)', text: oneLine(r.reply_text) }
+      : { state: 'Nothing posted', text: null };
+  const row = (k, v) => `<tr><td style="padding:9px 0;border-top:1px solid ${C.line};font-size:13px;color:${C.muted};width:120px;vertical-align:top;">${esc(k)}</td><td style="padding:9px 0;border-top:1px solid ${C.line};font-size:14px;line-height:20px;color:${C.ink};">${v}</td></tr>`;
+  const what = r.kind === 'dm' ? `sent a ${platformLabel(r.platform)} direct message` : `left an ${platformLabel(r.platform)} comment`.replace('an Facebook', 'a Facebook');
+  const body = p(`${esc(who)} ${esc(what)} that needs a personal reply from the team.`, 'margin-top:14px;')
+    + section('What they wrote', quote(oneLine(r.text) || 'No text (photo, sticker or attachment)', true))
+    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;border-bottom:1px solid ${C.line};">
+${row('Reason', `<b style="color:${C.urgent};">${esc(a.reason)}</b>`)}
+${row('Where', esc(where(r)))}
+${row('When', esc(fmtStamp(r.received_at, tz)) + ` <span style="color:${C.muted};">Vancouver</span>`)}
+${row('Our reply', esc(reply.state))}
+</table>`
+    + (reply.text ? section(r.status === 'replied' ? 'Reply we posted' : 'Reply we prepared', quote(reply.text)) : '')
+    + (link ? button(link, `Reply on ${platformLabel(r.platform)}`, C.urgent) : button(DASHBOARD_URL, 'Open the Inbox', C.urgent))
+    + p(`${link ? `Or ${textLink(DASHBOARD_URL, 'Open the Inbox')} in the dashboard to see the full thread. ` : ''}Once someone has answered, mark it handled in the Inbox.`, 'font-size:13px;line-height:20px;');
   return shell({
-    preheader: a.row ? `${a.reason}: ${clip(a.row.text, 90)}` : a.system.text,
-    eyebrow: a.row ? 'Urgent · Cloverdale Paint social inbox' : 'Cloverdale Paint social inbox',
-    title, subtitle: a.row ? `${platformLabel(a.row.platform)} ${kindLabel(a.row.kind).toLowerCase()} from ${oneLine(a.row.author_name) || 'a customer'}` : '',
-    bandColor: a.row ? '#7A1F1A' : C.band, body,
-    footer: 'Sent automatically by the Cloverdale Paint social dashboard when a message needs a person.',
+    urgent: true,
+    preheader: `${a.reason}: ${clip(r.text, 90)}`,
+    kicker: `Needs a person · ${a.reason}`, title: `${who} needs a reply`, body,
+    footer: `Reminder from the Cloverdale Paint social dashboard. Rule matched: ${esc(r.rule || 'n/a')}. Replying to this email does not reach the customer.`,
   });
 }
 
