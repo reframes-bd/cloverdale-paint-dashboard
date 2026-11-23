@@ -1,6 +1,6 @@
 // Weekly inbox digest for Cloverdale Paint. Writes ONE plain-text .eml into ALERT_DIR (the workflow's
 // email step sends every .eml in that folder) and records reply_settings.last_digest_at.
-// Runs only on Monday from 8:00 (America/Vancouver), at most once per 6 days. FORCE_DIGEST=1 skips the day and hour check.
+// Runs only on Monday from 8:00 (America/Vancouver), at most once per 6 days. FORCE_DIGEST=1 (manual run) always sends and does not count as the Monday digest.
 // Privacy: prints counts only. Never customer text and never the top words (they are only in the email).
 // Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ALERT_DIR, MAIL_FROM, ALERT_TO, optional FORCE_DIGEST
 'use strict';
@@ -47,7 +47,7 @@ async function main(opts) {
   const settings = ((await sb('GET', 'reply_settings', 'id=eq.1&select=last_digest_at,replies_on,dry_run,last_run_at')) || [])[0];
   if (!settings) { console.error('No reply_settings row'); return 1; }
   const last = settings.last_digest_at ? Date.parse(settings.last_digest_at) : null;
-  if (last != null && now - last < 6 * DAY) { console.log('digest: already sent this week'); return 0; }
+  if (!force && last != null && now - last < 6 * DAY) { console.log('digest: already sent this week'); return 0; }
 
   // last 7 days of messages
   const fromMs = now - 7 * DAY;
@@ -91,7 +91,8 @@ async function main(opts) {
   fs.mkdirSync(E.ALERT_DIR, { recursive: true });
   fs.writeFileSync(path.join(E.ALERT_DIR, `digest-${now}.eml`), eml, 'utf8');
   const iso = new Date(now).toISOString();
-  await sb('PATCH', 'reply_settings', 'id=eq.1', { last_digest_at: iso, updated_at: iso }, 'return=minimal');
+  // a manual send (FORCE_DIGEST) does not use up the Monday digest
+  if (!force) await sb('PATCH', 'reply_settings', 'id=eq.1', { last_digest_at: iso, updated_at: iso }, 'return=minimal');
   console.log(`digest: ${rows.length} messages, high priority ${high}, off-topic ${offTopic}`);
   return 0;
 }
