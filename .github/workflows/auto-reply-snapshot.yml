@@ -1,0 +1,89 @@
+name: Auto-reply snapshot (save or restore)
+
+# Restart button for the auto-reply system.
+# save:    tags the current main as auto-reply-stable-YYYY-MM-DD (adds -HHMM if that day already has one).
+# restore: puts the auto-reply files back exactly as they were in a snapshot tag, as one new commit.
+# Workflow files and index.html are NOT restored here (GitHub blocks the bot from editing workflows, and
+# index.html also carries other dashboard work). See AUTO-REPLY-BACKUP-AND-RESTORE in the project docs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'save = make a snapshot of main now; restore = go back to a snapshot'
+        type: choice
+        options: [save, restore]
+        default: save
+      tag:
+        description: 'For restore: snapshot tag to go back to'
+        type: string
+        default: 'auto-reply-stable-2026-11-23'
+      confirm:
+        description: 'For restore: type RESTORE to confirm'
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-reply-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    env:
+      FILES: scripts/auto-reply.js scripts/reply-engine.js scripts/email-templates.js scripts/weekly-digest.js scripts/sync-website.js inbox.js
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Save snapshot
+        if: inputs.action == 'save'
+        run: |
+          TAG="auto-reply-stable-$(TZ=America/Vancouver date +%Y-%m-%d)"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then TAG="$TAG-$(TZ=America/Vancouver date +%H%M)"; fi
+          git tag -a "$TAG" -m "Known-good auto-reply snapshot"
+          git push origin "$TAG"
+          {
+            echo "## Snapshot saved"
+            echo ""
+            echo "Tag: \`$TAG\` at commit \`$(git rev-parse --short HEAD)\`"
+            echo ""
+            echo "To go back to it later: run this workflow with action = restore, tag = $TAG, confirm = RESTORE."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Restore snapshot
+        if: inputs.action == 'restore'
+        env:
+          TAG: ${{ inputs.tag }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" != "RESTORE" ]; then echo "Type RESTORE in the confirm box to restore. Nothing changed."; exit 1; fi
+          if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then echo "Snapshot tag not found: $TAG"; git tag -l 'auto-reply-stable-*'; exit 1; fi
+          git config user.name "dashboard-bot"
+          git config user.email "dashboard-bot@users.noreply.github.com"
+          restored=""
+          for f in $FILES; do
+            if git cat-file -e "$TAG:$f" 2>/dev/null; then git checkout "$TAG" -- "$f"; restored="$restored $f"; fi
+          done
+          if git diff --cached --quiet; then
+            echo "Already identical to $TAG. Nothing to restore."
+            echo "## Nothing to restore: files already match \`$TAG\`" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git commit -m "Restore auto-reply files to $TAG"
+          for i in 1 2 3; do
+            if git push origin HEAD:main; then break; fi
+            echo "Push rejected (main moved). Rebasing and retrying ($i/3)."
+            git pull --rebase origin main
+          done
+          {
+            echo "## Restored to \`$TAG\`"
+            echo ""
+            echo "Files:$restored"
+            echo ""
+            echo "Next: run Inbox auto-reply by hand and check it is green. Workflow files and index.html were not touched."
+          } >> "$GITHUB_STEP_SUMMARY"
