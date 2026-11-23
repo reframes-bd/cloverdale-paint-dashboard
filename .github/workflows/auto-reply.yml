@@ -1,0 +1,79 @@
+name: Inbox auto-reply
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_digest:
+        description: 'Send the weekly digest now (skips the Monday check)'
+        type: boolean
+        default: false
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+
+concurrency:
+  group: inbox-auto-reply
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  reply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Sort and answer new comments and messages
+        env:
+          METRICOOL_API_TOKEN: ${{ secrets.METRICOOL_API_TOKEN }}
+          SUPABASE_URL: https://fdvvqnwoteksztyqadom.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          METRICOOL_BRAND_ID: 6980817
+          METRICOOL_USER_ID: 5352390
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          ALERT_TO: ${{ secrets.ALERT_TO }}
+          ALERT_DIR: ${{ runner.temp }}/alerts
+        run: node scripts/auto-reply.js
+
+      - name: Weekly digest (Mondays, optional)
+        if: always()
+        continue-on-error: true
+        env:
+          SUPABASE_URL: https://fdvvqnwoteksztyqadom.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          ALERT_TO: ${{ secrets.ALERT_TO }}
+          ALERT_DIR: ${{ runner.temp }}/alerts
+          FORCE_DIGEST: ${{ inputs.force_digest && '1' || '' }}
+        run: node scripts/weekly-digest.js
+
+      - name: Send alert emails (optional)
+        if: always()
+        env:
+          SMTP_URL: ${{ secrets.SMTP_URL }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          ALERT_TO: ${{ secrets.ALERT_TO }}
+          ALERT_DIR: ${{ runner.temp }}/alerts
+        run: |
+          if [ -z "$SMTP_URL" ] || [ -z "$ALERT_TO" ]; then echo "Alert email not set up; skipping"; exit 0; fi
+          if ! ls "$ALERT_DIR"/*.eml >/dev/null 2>&1; then echo "No alerts to send"; exit 0; fi
+          RCPT=()
+          IFS=',' read -ra ADDR <<< "$ALERT_TO"
+          for a in "${ADDR[@]}"; do RCPT+=(--mail-rcpt "$(echo "$a" | xargs)"); done
+          sent=0
+          for f in "$ALERT_DIR"/*.eml; do
+            curl --silent --show-error --fail --ssl-reqd \
+              --url "$SMTP_URL" --user "$SMTP_USER:$SMTP_PASS" \
+              --mail-from "$MAIL_FROM" "${RCPT[@]}" \
+              --upload-file "$f" && sent=$((sent + 1)) || echo "One alert email failed to send"
+          done
+          echo "Alert emails sent: $sent"
