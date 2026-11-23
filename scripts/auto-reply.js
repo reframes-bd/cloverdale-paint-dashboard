@@ -405,5 +405,5 @@ async function main() {
 
 module.exports = { main };
 if (require.main === module) {
-  main().then((code) => process.exit(code)).catch((e) => { console.error('Failed: ' + (e && /^Supabase \d+ on \w+$/.test(String(e.message)) ? e.message : (e && e.name) || 'error')); process.exit(1); });
+  main().then((code) => process.exit(code)).catch((e) => { console.error('Failed: ' + (e && /^Supabase \d+ on /.test(String(e.message)) ? e.message : (e && e.name) || 'error')); process.exit(1); });
 }
