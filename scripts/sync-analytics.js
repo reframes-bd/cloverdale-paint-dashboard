@@ -87,10 +87,10 @@ async function upsert(rows) {
     for (const name of names) {
       try {
         const r = await timeline(platform, name, from, now);
-        if (!r.ok) { console.log(`  skip ${platform}/${metric} (${name}): HTTP ${r.status} ${r.body.slice(0, 160)}`); continue; }
+        if (!r.ok) { console.log(`  skip ${platform}/${metric} (${name}): HTTP ${r.status}`); continue; }
         let json; try { json = JSON.parse(r.body); } catch { console.log(`  skip ${platform}/${metric} (${name}): non-JSON`); continue; }
         const pts = extract(json);
-        if (!pts.length) { console.log(`  skip ${platform}/${metric} (${name}): no points, raw ${r.body.slice(0, 200)}`); continue; }
+        if (!pts.length) { console.log(`  skip ${platform}/${metric} (${name}): no points`); continue; }
         const byDate = pts.map((p) => [normDate(p[0]), Number(p[1])]).sort((x, y) => (x[0] < y[0] ? -1 : 1));
         console.log(`${platform}/${metric} (${name}): ${pts.length} points ${byDate[0][0]}..${byDate[byDate.length - 1][0]} latest=${JSON.stringify(byDate.slice(-3))}`);
         for (const [d, v] of byDate) rows.push({ platform, metric, metric_label: name, date: d, value: v, synced_at: syncedAt });
