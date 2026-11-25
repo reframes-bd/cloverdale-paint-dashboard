@@ -386,11 +386,11 @@ async function main() {
       } else if (a.reason === 'limit') {
         subject = 'Cloverdale inbox alert: auto-reply limit reached';
         lines = ['The reply limit was reached in this run. The remaining messages are marked "needs a person" in the dashboard Inbox.'];
-        htmlData = { system: { title: 'Auto-reply limit reached', text: lines[0] } };
+        htmlData = { system: { light: 'amber', title: 'Reply limit reached', text: 'More messages came in than the safety limit allows in one run.', did: 'Answered up to the limit. The rest are marked "needs a person" in the Inbox.', todo: 'Check the Inbox and answer the rest. If this keeps happening, raise the limit.' } };
       } else {
         subject = 'Cloverdale inbox alert: auto-reply posting problem';
         lines = ['Posting replies failed three times in one run, so posting was stopped. The remaining replies are saved as "would reply" in the dashboard Inbox.'];
-        htmlData = { system: { title: 'Auto-reply posting problem', text: lines[0] } };
+        htmlData = { system: { light: 'red', title: 'Replies stopped posting', text: 'Posting a reply failed three times in one run.', did: 'Stopped posting for this run. The replies are saved as "would reply" in the Inbox. It tries again on the next run.', todo: 'Check that Metricool is still connected to Instagram and Facebook. If it keeps failing, switch Replies off in the Inbox and tell Claude.' } };
       }
       fs.writeFileSync(path.join(E.ALERT_DIR, `alert-${Date.now()}-${i}.eml`), buildEml(E, subject, lines, now, htmlData), 'utf8');
     });
