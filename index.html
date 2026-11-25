@@ -3635,5 +3635,97 @@ const hk=(location.hash||'').slice(1); if(SOC.includes(hk)) openChannel(hk);
 
 </script>
 
+<!-- fold: every dashboard section opens and closes on click (Nov 25 2026) -->
+<style id="cpFoldCss">
+.fold{margin-top:12px}
+.fold > .fold-b > .sec,.fold > .fold-b > .geo{margin-top:0}
+body.cp-user .fold[data-for="sec-ga4"],body.cp-user .fold[data-for="sec-ads"],body.cp-user .fold[data-for="sec-email"],body.cp-user .fold[data-for="sec-inbox"]{display:none !important}
+.fold-h{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:14px;width:100%;cursor:pointer;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 20px;transition:border-color .2s var(--ease),background .2s var(--ease)}
+.fold-h:hover{border-color:var(--line-2,var(--faint))}
+.fold-h:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.fold-h .fold-t{flex:1;min-width:0;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.fold-h b{font-size:17px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
+.fold-h span.fold-s{font-size:13px;color:var(--muted)}
+.fold-h svg{flex:none;width:18px;height:18px;color:var(--ink-2);transition:transform .25s var(--ease)}
+.fold.open > .fold-h{border-bottom-left-radius:14px;border-bottom-right-radius:14px}
+.fold.open > .fold-h svg{transform:rotate(180deg)}
+.fold > .fold-b{height:0;overflow:hidden;visibility:hidden;opacity:0}
+.fold.open > .fold-b{height:auto;overflow:visible;visibility:visible;opacity:1;padding-top:14px;transition:opacity .25s var(--ease)}
+.fold .fold-dup{display:none}
+.fold-all{display:flex;justify-content:flex-end;margin:14px 0 -2px}
+.fold-all button{border:1px solid var(--line);background:var(--surface);color:var(--ink-2);border-radius:8px;height:30px;padding:0 12px;font:500 12.5px/1 var(--f);cursor:pointer}
+#inboxRoot .ibx-wrap{max-height:min(560px,70vh);overflow:auto}
+#inboxRoot .ibx-wrap thead th{position:sticky;top:0;z-index:1;background:var(--surface)}
+@media (max-width:760px){.fold-h{padding:14px 16px}.fold-h b{font-size:16px}.fold-h span.fold-s{display:none}}
+@media print{.fold > .fold-b{height:auto!important;overflow:visible!important;visibility:visible!important;opacity:1!important}.fold-h,.fold-all{display:none!important}}
+@media (prefers-reduced-motion:reduce){.fold-h svg,.fold.open > .fold-b{transition:none}}
+</style>
+<script id="cpFoldJs">
+(function(){
+  var LIST=[
+    ['sec-overview','Overview','Followers, reach and engagement at a glance',true],
+    ['sec-growth','Growth','Followers gained and lost'],
+    ['sec-reach','Reach and engagement','This period against the one before'],
+    ['sec-content','Content','Top posts and what people engaged with'],
+    ['sec-geo','Audience','Where followers live'],
+    ['sec-timing','Timing','When the audience is online'],
+    ['sec-ga4','Website traffic','Google Analytics 4'],
+    ['sec-email','Email timing','Best time to send email'],
+    ['sec-ads','Ad campaigns','Paid campaign results'],
+    ['sec-inbox','Inbox','Comments, messages and auto-replies'],
+    ['sec-calendar','Content calendar','Scheduled and published posts'],
+    ['sec-market','Competitors','How we compare']
+  ];
+  var KEY='cp.fold.v1', saved={};
+  try{ saved=JSON.parse(localStorage.getItem(KEY)||'{}')||{}; }catch(e){ saved={}; }
+  function save(){ try{ localStorage.setItem(KEY,JSON.stringify(saved)); }catch(e){} }
+  var chev='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>';
+  var folds=[];
+  LIST.forEach(function(it){
+    var sec=document.getElementById(it[0]); if(!sec||(sec.parentNode&&sec.parentNode.classList&&sec.parentNode.classList.contains('fold-b'))) return;
+    var wrap=document.createElement('div'); wrap.className='fold'; wrap.setAttribute('data-for',it[0]);
+    var body=document.createElement('div'); body.className='fold-b'; body.id=it[0]+'-body';
+    var h=document.createElement('button'); h.type='button'; h.className='fold-h'; h.setAttribute('aria-controls',body.id);
+    h.innerHTML='<span class="fold-t"><b>'+it[1]+'</b><span class="fold-s">'+it[2]+'</span></span>'+chev;
+    sec.parentNode.insertBefore(wrap,sec); body.appendChild(sec); wrap.appendChild(h); wrap.appendChild(body);
+    sec=wrap;
+    var f={id:it[0],sec:sec,h:h,b:body,title:it[1]};
+    var open=(it[0] in saved)?!!saved[it[0]]:!!it[3];
+    set(f,open,true);
+    h.addEventListener('click',function(){ set(f,!sec.classList.contains('open')); saved[f.id]=sec.classList.contains('open'); save(); syncAll(); });
+    folds.push(f);
+  });
+  function dedupe(f){ // hide the section's own heading when it repeats the bar title
+    var hs=f.b.querySelectorAll('.sh > h2'); for(var i=0;i<hs.length;i++){ var dup=hs[i].textContent.trim()===f.title, sh=hs[i].parentNode, plain=!sh.querySelector('button,select,input,a'); sh.classList.toggle('fold-dup',dup&&plain); hs[i].classList.toggle('fold-dup',dup&&!plain); }
+  }
+  function set(f,open,quiet){
+    f.sec.classList.toggle('open',open); f.h.setAttribute('aria-expanded',String(open));
+    f.b.setAttribute('aria-hidden',String(!open)); if('inert' in f.b) f.b.inert=!open;
+    dedupe(f);
+    if(open&&!quiet) setTimeout(function(){ window.dispatchEvent(new Event('resize')); },30);
+  }
+  folds.forEach(function(f){ if(window.MutationObserver){ var t; new MutationObserver(function(){ clearTimeout(t); t=setTimeout(function(){ dedupe(f); },60); }).observe(f.b,{childList:true,subtree:true}); } });
+  // anything that scrolls to a closed section (side menu, phone tabs, "see on map" links) opens it first
+  var sv=Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView=function(){
+    var w=this.closest&&this.closest('.fold');
+    if(w&&!w.classList.contains('open')){ folds.forEach(function(f){ if(f.sec===w){ set(f,true); saved[f.id]=true; save(); syncAll(); } }); }
+    return sv.apply(this,arguments);
+  };
+  document.addEventListener('click',function(e){
+    var b=e.target.closest&&e.target.closest('[data-go="#top"]'); if(!b) return;
+    folds.forEach(function(f){ if(f.id==='sec-overview'&&!f.sec.classList.contains('open')){ set(f,true); saved[f.id]=true; save(); syncAll(); } });
+  },true);
+  // open all / close all
+  var mast=document.querySelector('.mast'); var bar=null;
+  if(mast&&folds.length){ bar=document.createElement('div'); bar.className='fold-all'; bar.innerHTML='<button type="button" id="foldAll"></button>'; mast.parentNode.insertBefore(bar,mast.nextSibling);
+    bar.firstChild.addEventListener('click',function(){ var anyClosed=folds.some(function(f){return !f.sec.classList.contains('open');}); folds.forEach(function(f){ set(f,anyClosed,true); saved[f.id]=anyClosed; }); save(); syncAll(); if(anyClosed) setTimeout(function(){ window.dispatchEvent(new Event('resize')); },30); }); }
+  function syncAll(){ if(!bar) return; var anyClosed=folds.some(function(f){return !f.sec.classList.contains('open');}); bar.firstChild.textContent=anyClosed?'Open all sections':'Close all sections'; }
+  syncAll();
+  // a link straight to a section (for example #sec-inbox from the emails) opens it
+  var hk=(location.hash||'').slice(1); folds.forEach(function(f){ if(f.id===hk){ set(f,true); setTimeout(function(){ f.sec.scrollIntoView({block:'start'}); },400); } });
+})();
+</script>
+
 </body>
 </html>
