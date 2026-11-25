@@ -301,14 +301,18 @@ async function main() {
   }
 
   const pending = []; // rows to bulk insert at the end
+  const usedByThread = new Map(); // reply versions already chosen per thread in this run, so neighbours get different wording
   for (const c of fresh) {
     let row;
     if (c.outsideWindow) {
       row = toRow(c, { status: 'no_reply', rule: 'dm: outside reply window' });
       pending.push(row); continue;
     }
-    const ctx = { rules, links, stores, pages, priorComplaint: !!(c.author_id && priorSet.has(c.author_id)) };
-    const r = classify({ platform: c.platform, kind: c.kind, text: c.text, author_name: c.author_name, on_own_post: c.kind === 'comment', reply_to_other: !!c.reply_to_other }, ctx);
+    const tkey = c.platform + '|' + c.thread_id;
+    if (!usedByThread.has(tkey)) usedByThread.set(tkey, new Set());
+    const ctx = { rules, links, stores, pages, priorComplaint: !!(c.author_id && priorSet.has(c.author_id)), used: usedByThread.get(tkey) };
+    const r = classify({ id: c.external_id, platform: c.platform, kind: c.kind, text: c.text, author_name: c.author_name, on_own_post: c.kind === 'comment', reply_to_other: !!c.reply_to_other }, ctx);
+    if (r.action === 'reply' && Array.isArray(r.variants)) r.variants.forEach((v) => usedByThread.get(tkey).add(v));
     catCounts[r.category] = (catCounts[r.category] || 0) + 1;
     if (r.category === 'complaint' || r.category === 'complaint_high') { if (c.author_id) priorSet.add(c.author_id); }
     const base = { category: r.category, priority: r.priority, rule: r.rule, pages_used: r.pages_used };

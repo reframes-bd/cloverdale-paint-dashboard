@@ -21,6 +21,7 @@
   const PRE = ['in', 'at', 'near', 'to', 'from', 'around', 'the'];
   const POST = ['store', 'location', 'branch', 'bc', 'ab', 'on', 'sk', 'mb'];
   const GENERAL_Q_START = /^(?:what|which|where|when|how|why|who|can|could|do|does|is|are|will|would|should)(?![a-z0-9])/;
+  const REQUEST_RE = /^(?:tell me|show me|looking for|i'?m looking for|i need|we need|need|any (?:recommendation|suggestion|advice)s?|recommend|suggest|info on|information on|details on)(?![a-z0-9])/;
   const QUESTIONISH = /(?<![a-z0-9])(?:i have a question|have a question|quick question|a question|need help|can you help|help me|i was wondering|wondering|inquir[a-z]*|enquir[a-z]*)(?![a-z0-9])/;
   const DM_INTENT = /(?<![a-z0-9])(?:question|questions|help|inquiry|enquiry|info|information|wondering|asking|advice|assist[a-z]*)(?![a-z0-9])/;
   const STORE_ASK = /(?<![a-z0-9])(?:what time|when do you|are you open|is the store|store hours|your hours)(?![a-z0-9])/;
@@ -187,7 +188,10 @@
   }
 
   // ---------- templates ----------
+  // A missing name drops the ", {name}" form instead of writing "Thanks, there!"; "Hi {name}," becomes "Hi there,".
   function fill(t, vals) {
+    if (t == null) return null;
+    if (!vals.name || vals.name === 'there') t = t.replace(/,\s*\{name\}(?=\s*[!.?,])/g, '').replace(/\s\{name\}(?=[!.?])/g, '').replace(/\{name\}/g, 'there');
     return t.replace(/\{([a-z_]+)\}/g, (m, k) => (vals[k] != null && String(vals[k]).trim() !== '' ? String(vals[k]) : m));
   }
 
@@ -202,6 +206,21 @@
     const name = firstName(msg.author_name);
     const baseVals = Object.assign({}, links, { name });
     const M = (cat, key) => C.m(cat, key, text);
+    // REPLY BRAIN: a template may hold several versions separated by "||". One is chosen per message
+    // (stable for the same message), skipping versions already used in this thread during this run (ctx.used).
+    const used = ctx.used instanceof Set ? ctx.used : new Set();
+    const picked = [];
+    const seed = String(msg.id || msg.external_id || '') + '|' + text;
+    const T = (rule, key) => {
+      const all = tpl(rule, key);
+      if (all == null) return null;
+      if (all.indexOf('||') < 0) return all; // single version: keep it exactly (add-on lines start with a space)
+      const vs = all.split('||').map((v) => v.trim()).filter(Boolean);
+      if (vs.length <= 1) return vs[0] || null;
+      const start = hash(seed + '|' + key) % vs.length;
+      for (let i = 0; i < vs.length; i++) { const v = vs[(start + i) % vs.length]; if (!used.has(v)) { picked.push(v); return v; } }
+      picked.push(vs[start]); return vs[start];
+    };
 
     const result = (category, action, o) => Object.assign({ category, priority: 'normal', action, status_hint: null, reply: null, rule: '', pages_used: null }, o || {});
     // Finish a reply: resolve placeholders, enforce one url at most, else hand to a person.
@@ -209,7 +228,7 @@
       const o = Object.assign({ priority: 'normal', status_hint: null, pages_used: null }, extra || {});
       if (body == null || /\{[a-z_]+\}/.test(body)) return result(category, 'needs_person', Object.assign(o, { rule: rule + ' (unresolved placeholder)' }));
       if ((body.match(/https?:\/\/\S+/g) || []).length > 1) return result(category, 'needs_person', Object.assign(o, { rule: rule + ' (more than one url)' }));
-      return result(category, 'reply', Object.assign(o, { rule, reply: body }));
+      return result(category, 'reply', Object.assign(o, { rule, reply: body, variants: picked.slice() }));
     };
 
     // 0a empty
@@ -302,14 +321,14 @@
     // 2 and 3 complaints
     const high = R.complaint_high, comp = R.complaint;
     const complaintReply = (rule) => {
-      const t = (storeUsable ? tpl(rule, 'store') : null) || tpl(rule, 'locator');
+      const t = (storeUsable ? T(rule, 'store') : null) || T(rule, 'locator');
       const where = storeUsable ? 'store template' : 'locator template';
       return { body: t ? fill(t, Object.assign({}, baseVals, storeUsable ? storeVals() : {})) : null, where };
     };
     if (highWhy && high) {
       const { body, where } = complaintReply(high);
       let b = body;
-      const healthLine = tpl(high, 'health_line');
+      const healthLine = T(high, 'health_line');
       const health = M('complaint_high', 'health').length > 0;
       if (b != null && health && healthLine) b += healthLine;
       return finish('complaint_high', `complaint_high: ${highWhy}, ${where}${health ? ', health line' : ''}`, b, { priority: 'high', status_hint: 'needs_person' });
@@ -323,13 +342,22 @@
     if (!v2) { const p = prCheck(); if (p) return p; }
 
     // 5 jobs
-    if (R.jobs && jobsHit) return finish('jobs', 'jobs: trigger', tpl(R.jobs, 'default') && fill(tpl(R.jobs, 'default'), baseVals));
+    if (R.jobs && jobsHit) return finish('jobs', 'jobs: trigger', T(R.jobs, 'default') && fill(T(R.jobs, 'default'), baseVals));
 
     // praise statement: before store, only when it is not a question
-    const praiseKey = () => 'v' + (1 + (hash(text) % 3));
+    // praise flavour: brand love, looks (colour or space), thanks for service, or a warm general thank-you
+    const praiseKey = () => {
+      if (R.praise && R.praise.templates && typeof R.praise.templates.warm === 'string') {
+        if (M('praise', 'service').length) return 'service';
+        if (M('praise', 'brand').length) return 'brand';
+        if (M('praise', 'looks').length) return 'looks';
+        return 'warm';
+      }
+      return 'v' + (1 + (hash(text) % 3));
+    };
     if (R.praise && praiseHit && !hasQ && !QUESTION_RE.some((re) => re.test(text))) {
       const key = praiseKey();
-      return finish('praise', 'praise: ' + key, tpl(R.praise, key) && fill(tpl(R.praise, key), baseVals));
+      return finish('praise', 'praise: ' + key, T(R.praise, key) && fill(T(R.praise, key), baseVals));
     }
 
     // 6 store (also: a store or city named in a question, unless it is about price)
@@ -345,16 +373,16 @@
           else if (det.kind === 'multi') { key = 'locator'; why = 'more than one city named'; }
           else { key = 'locator'; why = 'no city'; }
           if (key === 'store' && !storeUsable) { key = 'locator'; why = 'store missing phone or hours'; }
-          const t = tpl(R.store, key);
+          const t = T(R.store, key);
           let b = t && fill(t, Object.assign({}, baseVals, key === 'store' ? storeVals() : { city: det.city }));
-          if (b != null && hol && tpl(R.store, 'holiday_line')) b += tpl(R.store, 'holiday_line');
+          if (b != null && hol && T(R.store, 'holiday_line')) b += T(R.store, 'holiday_line');
           return finish('store', 'store: ' + why + (hol ? ', holiday line' : ''), b);
         }
       }
     }
 
     // 7 price
-    if (R.price && priceHit) return finish('price', 'price: trigger', tpl(R.price, 'default') && fill(tpl(R.price, 'default'), baseVals));
+    if (R.price && priceHit) return finish('price', 'price: trigger', T(R.price, 'default') && fill(T(R.price, 'default'), baseVals));
 
     const deep = R.deep;
     const deepCheck = (category) => {
@@ -364,23 +392,29 @@
       const nw = text.split(' ').filter(Boolean).length;
       const why = M('deep', 'any').length ? 'trigger' : (dt.min_question_marks && qm >= dt.min_question_marks) ? 'question marks' : (dt.max_words && nw > dt.max_words) ? 'long message' : null;
       if (!why) return null;
-      const t = tpl(deep, 'default');
+      const t = T(deep, 'default');
       return finish(category, `${category}: deep`, t && fill(t, baseVals), {});
     };
 
     // 8 product
     if (R.product) {
       const skipProduct = whichColour.length || M('colour', 'tools').length || M('colour', 'sheen').length || (howtoAny.length && !dsHit && !availHit) || tradeDI.length;
-      const pm = skipProduct ? null : pageMatch(text, ctx.pages, 'product');
-      if (!skipProduct && (productAny.length || dsHit || pm)) {
+      // a statement ("Painting my kitchen this weekend!") is not a product question: let it fall through to praise or general
+      const leadQ = text.replace(/^(?:@\S+\s*)+/, '');
+      const pmRaw = skipProduct ? null : pageMatch(text, ctx.pages, 'product');
+      const dtr = (deep && deep.triggers) || {};
+      const longMsg = dtr.max_words && text.split(' ').filter(Boolean).length > dtr.max_words;
+      const asking = hasQ || GENERAL_Q_START.test(leadQ) || QUESTIONISH.test(text) || REQUEST_RE.test(leadQ) || dsHit || availHit || kind === 'dm' || !!pmRaw || longMsg || M('deep', 'any').length > 0;
+      const pm = asking ? pmRaw : null;
+      if (!skipProduct && asking && (productAny.length || dsHit || pm)) {
         const d = deepCheck('product'); if (d) return d;
-        const avail = availHit ? (tpl(R.product, 'availability_line') || '') : '';
-        if (dsHit) return finish('product', 'product: datasheet', tpl(R.product, 'datasheet') && fill(tpl(R.product, 'datasheet'), baseVals));
+        const avail = availHit ? (T(R.product, 'availability_line') || '') : '';
+        if (dsHit) return finish('product', 'product: datasheet', T(R.product, 'datasheet') && fill(T(R.product, 'datasheet'), baseVals));
         if (pm) {
-          const t = tpl(R.product, 'page');
+          const t = T(R.product, 'page');
           return finish('product', 'product: page match' + (avail ? ', availability line' : ''), t && fill(t, Object.assign({}, baseVals, { page_title: pm.title, page_url: pm.url })) + avail, { pages_used: pm.url });
         }
-        const t = tpl(R.product, 'catalog');
+        const t = T(R.product, 'catalog');
         return finish('product', 'product: catalog' + (avail ? ', availability line' : ''), t && fill(t, baseVals) + avail);
       }
     }
@@ -394,10 +428,10 @@
       else if (M('colour', 'look').length) key = 'look';
       if (key) {
         if (key !== 'look') { const d = deepCheck('colour'); if (d) return d; }
-        return finish('colour', 'colour: ' + key, tpl(R.colour, key) && fill(tpl(R.colour, key), baseVals));
+        return finish('colour', 'colour: ' + key, T(R.colour, key) && fill(T(R.colour, key), baseVals));
       }
       // no look, sheen or tools word: a question goes to the store team, a statement continues down
-      if (hasQ) { const t = tpl(R.deep, 'default'); return finish('colour', 'colour: question, store', t && fill(t, baseVals)); }
+      if (hasQ) { const t = T(R.deep, 'default'); return finish('colour', 'colour: question, store', t && fill(t, baseVals)); }
     }
 
     // 10 howto
@@ -408,22 +442,22 @@
       else if (M('howto', 'recycling').length) key = 'recycling';
       else {
         const pm = pageMatch(text, ctx.pages, 'howto');
-        if (pm) return finish('howto', 'howto: page match', tpl(R.howto, 'page') && fill(tpl(R.howto, 'page'), Object.assign({}, baseVals, { page_url: pm.url, page_title: pm.title })), { pages_used: pm.url });
+        if (pm) return finish('howto', 'howto: page match', T(R.howto, 'page') && fill(T(R.howto, 'page'), Object.assign({}, baseVals, { page_url: pm.url, page_title: pm.title })), { pages_used: pm.url });
       }
-      return finish('howto', 'howto: ' + key, tpl(R.howto, key) && fill(tpl(R.howto, key), baseVals));
+      return finish('howto', 'howto: ' + key, T(R.howto, key) && fill(T(R.howto, key), baseVals));
     }
 
     // 11 trade
     if (R.trade && tradeAny.length) {
       const d = deepCheck('trade'); if (d) return d;
       const key = M('trade', 'dealer').length ? 'dealer' : M('trade', 'industrial').length ? 'industrial' : 'trade';
-      return finish('trade', 'trade: ' + key, tpl(R.trade, key) && fill(tpl(R.trade, key), baseVals));
+      return finish('trade', 'trade: ' + key, T(R.trade, key) && fill(T(R.trade, key), baseVals));
     }
 
     // 12 praise (not a question)
     if (R.praise && praiseHit && !hasQ) {
       const key = praiseKey();
-      return finish('praise', 'praise: ' + key, tpl(R.praise, key) && fill(tpl(R.praise, key), baseVals));
+      return finish('praise', 'praise: ' + key, T(R.praise, key) && fill(T(R.praise, key), baseVals));
     }
 
     // general (version 2) or none (version 1)
@@ -434,7 +468,7 @@
     if (isQuestion && praiseHit) return result('general', 'needs_person', { rule: 'general: question about the post' });
     // a weak store word that was not asked like a store question ('Surrey hours please') still goes to the store team
     const key = isQuestion || storeHits.length > 0 ? 'question' : 'comment';
-    return finish('general', 'general: ' + key, tpl(R.general, key) && fill(tpl(R.general, key), baseVals));
+    return finish('general', 'general: ' + key, T(R.general, key) && fill(T(R.general, key), baseVals));
   }
 
   return { normalize, classify, firstName };
